@@ -1,0 +1,4 @@
+root: true
+extends: isiahmeadows/node-4
+rules:
+    no-process-exit: 0
