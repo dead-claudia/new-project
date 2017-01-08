@@ -302,7 +302,7 @@ running this script.
             lint: "eslint .",
             test: "eslint . && tl",
         },
-        author: name,
+        author: name.trim().replace(/\s+/g, " "),
         license: opts.license,
     }, null, 2))),
 
