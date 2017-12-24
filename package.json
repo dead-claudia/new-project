@@ -6,8 +6,8 @@
     "test": "eslint ."
   },
   "files": ["new-project.js"],
-  "bin": {"new-project": "new-project.js"},
-  "author": "Isiah Meadows\n",
+  "bin": "new-project.js",
+  "author": "Isiah Meadows",
   "license": "ISC",
   "repository": "isiahmeadows/new-project",
   "devDependencies": {

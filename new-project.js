@@ -78,6 +78,14 @@ Options:`)
     -n name, --name name
         Set the name of the package. Defaults to the directory's basename.
 
+    -p name, --preset name
+        Set the ESLint preset to start with for the package. Defaults to
+        'isiahmeadows/node-4'.
+
+    -c cilent, --client client
+        Set the npm client to use, either 'npm' or 'yarn'. The default is to
+        attempt Yarn first, then fall back on npm.
+
     directory
         Where the package will be located. This is the only required argument,
         and the package name is inferred from the basename of the directory.
@@ -137,7 +145,7 @@ Folder Structure:
     │   The newly installed modules with their dependencies:
     │   - 'thallium'
     │   - 'eslint'
-    │   - 'eslint-config-isiahmeadows'
+    │   - 'eslint-config-isiahmeadows' (or whatever preset needs installed)
     │
     ├── .gitignore
     │   A basic config file telling Git to ignore these files in the root:
@@ -209,6 +217,9 @@ function parseOpts() {
         description: "A really fancy module I just created!",
         version: "0.0.0",
         license: "ISC",
+        preset: "isiahmeadows/node-4",
+        config: undefined,
+        client: undefined,
     }
 
     let next
@@ -227,6 +238,8 @@ function parseOpts() {
         case "--version": case "-v": next = "version"; break
         case "--license": case "-l": next = "license"; break
         case "--name": case "-n": next = "name"; break
+        case "--preset": case "-p": next = "preset"; break
+        case "--client": case "-c": next = "client"; break
         default:
             if (arg[0] !== "-" && !opts.directory) {
                 opts.directory = arg
@@ -235,19 +248,36 @@ function parseOpts() {
         }
     }
 
-    if (!opts.directory) opts.directory = process.cwd()
+    if (!opts.directory) {
+        console.error(`
+You must give a directory to create the new project in.
+`)
+        process.exit(1)
+    }
+
+    if (opts.client != null && opts.client !== "npm" &&
+            opts.client !== "yarn") {
+        console.error(`
+Unknown npm client '${opts.client}'. The only valid clients are 'npm' and
+'yarn'. Please choose one of those two if you want a specific one.
+`)
+        process.exit(1)
+    }
+
+    const exec = /^(.*)\//.exec(opts.preset)
+
+    opts.config = exec != null ? exec[0] : opts.preset
     return opts
 }
 
-function exec(file) {
+function exec(file, args) {
     return new Promise((resolve, reject) => {
-        file = file.trim().split(/\s+/g)
-        cp.spawn(file[0], file.slice(1), {stdio: "inherit"})
+        cp.spawn(file, args, {stdio: "inherit"})
         .on("error", reject)
         .on("exit", code => {
             if (!code) return resolve()
             return reject(new Error(
-                `'${file.join(" ")}' exited with code ${code}`
+                `'${file} ${args.join(" ")}' exited with code ${code}`
             ))
         })
     })
@@ -290,7 +320,7 @@ running this script.
 .then(() => console.log("Initializing repository..."))
 .then(() => process.chdir(opts.directory))
 .then(() => Promise.all([
-    exec("git init --quiet"),
+    exec("git", ["init", "--quiet"]),
 
     pcall(cp.execFile, "git", ["config", "--global", "user.name"])
     .then(name => write("package.json", JSON.stringify({
@@ -320,7 +350,7 @@ running this script.
 
     write(".eslintrc.yml", `
 root: true
-extends: isiahmeadows/node-4
+extends: ${opts.preset}
 `),
 
     write(".tl.js", `
@@ -361,15 +391,18 @@ t.test("index", () => {
 `)),
 ]))
 .then(() => console.log("Installing packages..."))
-.then(() => exec(`
-    npm install
-        --depth 0
-        --global false
-        --save-dev
-        thallium
-        eslint
-        eslint-config-isiahmeadows
-`))
+.then(() => {
+    const packages = ["thallium", "eslint", `eslint-config-${opts.config}`]
+    const npmArgs = ["install", "--depth", "0", "--save-dev"].concat(packages)
+    const yarnArgs = ["add", "--dev"].concat(packages)
+
+    if (opts.client === "npm") return exec("npm", npmArgs)
+    if (opts.client === "yarn") return exec("yarn", yarnArgs)
+    return exec("yarn", yarnArgs).catch(e => {
+        if (e.code !== "ENOENT") throw e
+        return exec("npm", npmArgs)
+    })
+})
 .then(() => console.log("Project initialized."))
 .catch(e => {
     console.error(e.stack)
